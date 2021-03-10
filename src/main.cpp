@@ -11,6 +11,8 @@
 #include "camera.hpp"
 #include "port.hpp"
 #include "threadpool.hpp"
+#include "memorypool.hpp"
+//#include "objectpool.hpp"
 
 using namespace cv;
 using namespace Dahua::GenICam;
@@ -279,7 +281,7 @@ int main(int argc, const char* argv[])
 	//初始化相机设备
 	InitCamera(cameraSptr);
 #ifdef _DBG
-	PrintCameraInfo(cameraSptr);
+	//PrintCameraInfo(cameraSptr);
 #endif
 
 	errCode = CSerialPort::GetSerialPort().GetErrCode();
@@ -288,10 +290,10 @@ int main(int argc, const char* argv[])
 	}
 
 	//初始化线程
-	CThreadPool<CTask> pool(3);
+	CThreadPool<CTask> pool(1);
 	for (size_t i = 0; i < 100; i++)
 	{
-		pool.push_task(new CTask(&CallBack, (void*)i));
+	//	pool.push_task(new CTask(&CallBack, (void*)i));
 	}
 	//pool.push_task(new CTask(&CallBack, (void*)0xCCCCCCCC));
 	//pool.push_task(std::make_shared<CTask>(&CallBack, (void*)0x12345678));

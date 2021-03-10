@@ -203,21 +203,21 @@ bool CSerialPort::InitSerialPort(void)
  */
 ssize_t CSerialPort::Read()
 {
-    fd_set fs_read;   
-    struct timeval timeout;    
-       
-    FD_ZERO(&fs_read);  // 清空串口接收端口集   
-    FD_SET(fd,&fs_read);// 设置串口接收端口集    
-       
-    timeout.tv_sec = 10;//设置超时时间    
+    fd_set fs_read;
+    struct timeval timeout;
+
+    FD_ZERO(&fs_read);  // 清空串口接收端口集
+    FD_SET(fd,&fs_read);// 设置串口接收端口集
+
+    timeout.tv_sec = 10;//设置超时时间
     timeout.tv_usec = 0;
 
-    //使用select实现串口的多路通信    
+    //使用select实现串口的多路通信
     if(select(fd+1, &fs_read, NULL, NULL, &timeout) > 0) {
         for (size_t i = 0; i < rdataLen; ++i) {
             readBuf[i] = 0;//初始化缓冲区
         }
-            
+
         size_t len = read(fd, readBuf, rdataLen);
         if (len == rdataLen) {
             //write(STDOUT_FILENO, readBuf, len);
@@ -226,10 +226,10 @@ ssize_t CSerialPort::Read()
             SHOW(("read data fail...\n"));
             tcflush(fd,TCIFLUSH);
             return 0;
-        }    
+        }
     } else {
         SHOW(("nothing data...\n"));
-        return false;    
+        return false;
     }
 }
 

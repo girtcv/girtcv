@@ -23,6 +23,9 @@ function do_compile()
     fi
     cd ./build
 
+    ## 允许系统生成core文件
+    ulimit -c unlimited
+
     #   确定与构建模式相关的参数
     if   [[ "$2" == "debug" ]] || [[ "$2" == "" ]]; then
         cmake -DCMAKE_BUILD_TYPE=Debug ..
@@ -34,6 +37,13 @@ function do_compile()
     fi
 
     make clean  ##取消make clean可以加快编译速度
+
+    if [ -f core ]; then
+        ## 备份之前系统生成的core文件
+		mv core $(date +%Y-%m-%d_%H:%M:%S)core
+    fi
+
+    ## 4线程编译代码
     make -j4
 
     ../bin/main
