@@ -2,9 +2,21 @@
 #define _MEMORYPOOL_HPP_
 
 #include <cstdlib>
+#include <mutex>
 #include "debug.h"
 
 class CMemoryPool;
+
+//内存块 最小单元
+using pair_t = unsigned int;
+typedef struct _Pair
+{
+    pair_t size;
+	pair_t blockNum;
+
+	_Pair(pair_t pSize, pair_t blockNumber)
+	:size(pSize), blockNum(blockNumber){}
+}Pair;
 
 //内存块 最小单元
 struct MemoryBlock
@@ -55,6 +67,26 @@ public:
         pTem = (MemoryBlock*)((char*)pTem - realSize);
         pTem->pNext = nullptr;
 	}
+	//委托构造
+	CMemoryPool(Pair& pair)
+	:CMemoryPool(pair.size, pair.blockNum){}
+
+	CMemoryPool() = default;
+
+	CMemoryPool& operator=(CMemoryPool&& rhs){
+		if(this != &rhs) {
+			if(_poolBuf) {
+				free(_poolBuf);
+			}
+
+			_poolBuf = rhs._poolBuf;
+			_pHeader = rhs._pHeader;
+			_sizeOfBlock = rhs._sizeOfBlock;
+			_numOfBlock = rhs._numOfBlock;
+			rhs._poolBuf = nullptr;
+		}
+		return *this;
+	}
 
 	~CMemoryPool() {
 		if (_poolBuf) {
@@ -66,7 +98,10 @@ public:
 	//申请内存
 	void* allocMemory(size_t size) {
 		MemoryBlock* pReturn = nullptr;
+		//加锁保护共享数据
+		_mutex.lock();
 		if (nullptr == _pHeader) {
+			_mutex.unlock();
             //此时内存池中的内存已经用完了,需要通过malloc申请新的内存
 			pReturn = (MemoryBlock*)malloc(size + sizeof(MemoryBlock));
 			pReturn->bPool = false;
@@ -77,6 +112,7 @@ public:
 			pReturn = _pHeader;
             //并把分配给用户的内存移出链表
 			_pHeader = _pHeader->pNext;
+			_mutex.unlock();
 			pReturn->nRefCount = 1;
             //将分配出去的mBlock指向内存池方便使用完后再放回内存池
             pReturn->pool = this;
@@ -93,6 +129,7 @@ public:
 		}
 		//判断是内存池还是malloc出来的内存
 		if (pBlock->bPool) {//内存池出来的放回池中
+        	std::lock_guard<std::mutex> lock(_mutex);
 			pBlock->pNext = _pHeader;
 			_pHeader = pBlock;
 		} else {//malloc出来的free掉
@@ -109,6 +146,7 @@ private:
 	size_t _sizeOfBlock;
 	//内存单元数量
 	size_t _numOfBlock;
+	std::mutex _mutex;
 };
 
 //内存池管理工具
@@ -143,6 +181,7 @@ public:
 	}
 
 private:
+#if 0
 	///@breif:_MemoryX(X,Y) X:内存单元块的大小 Y:申请多少块内存
 	CMemoryManager():_Memory0(0,0),_Memory64(64,10240),
 	_Memory128(128,2048), _Memory512(512,128),
@@ -159,6 +198,40 @@ private:
 		_poolArr = poolAddress;
 		_arrlength = sizeof(sizeArr)/sizeof(unsigned int);
 	}
+#endif
+	///@breif:_MemoryX(X,Y) X:内存单元块的大小 Y:申请多少块内存
+	CMemoryManager(){
+		Pair pairArr[] = { Pair(0,0),
+		Pair(64,10240),Pair(128,2048),
+		Pair(512,128),Pair(1024, 64)};
+
+		auto s = sizeof(pairArr)/sizeof(Pair);
+		COUT("sizeOfpairArr:%ld\n", s);
+		//每个内存池可以申请到的最大内存再加一
+		static size_t sizeArr[sizeof(pairArr)/sizeof(Pair)] = {0};
+		for (size_t i = 0; i < sizeof(pairArr)/sizeof(Pair); ++i) {
+			sizeArr[i] = pairArr[i].size+1;
+		}
+
+		static CMemoryPool mPoolArr[sizeof(pairArr)/sizeof(Pair)];
+		for (size_t j = 0; j < sizeof(pairArr)/sizeof(Pair); ++j) {
+			mPoolArr[j] = CMemoryPool(pairArr[j]);
+		}
+
+		//内存池地址索引
+		static CMemoryPool* poolAddress[sizeof(pairArr)/sizeof(Pair)];
+		size_t k;
+		for (k = 1; k < sizeof(pairArr)/sizeof(Pair)-1; ++k) {
+			poolAddress[k] = &mPoolArr[k];
+		}
+		poolAddress[0] = nullptr;
+		poolAddress[k] = &mPoolArr[0];
+
+		_poolSizeArr = sizeArr;
+		_poolArr = poolAddress;
+		_arrlength = sizeof(pairArr)/sizeof(Pair);
+	}
+
 
 	///@breif:根据要申请的内存大小去匹配合适的内存池
 	///@param size:要申请的内存大小
@@ -172,19 +245,20 @@ private:
 		return _poolArr[i];
 	}
 	//这三个变量配合索引出合适的内存池
-	unsigned int  _arrlength;
-	unsigned int* _poolSizeArr;
+	size_t  _arrlength;
+	size_t* _poolSizeArr;
 	CMemoryPool** _poolArr;
 
 	//虚拟内存池 用来管理malloc出来的大内存
-	CMemoryPool _Memory0;
-
+	//CMemoryPool _Memory0;
+#if 0
 	//64byte内存池 <64的内存统一在这个池里申请
-	CMemoryPool _Memory64;
+	//CMemoryPool _Memory64;
 	//128byte内存池 64<size<128在这个池里申请
-	CMemoryPool _Memory128;
-	CMemoryPool _Memory512;
-	CMemoryPool _Memory1024;
+	// CMemoryPool _Memory128;
+	// CMemoryPool _Memory512;
+	// CMemoryPool _Memory1024;
+#endif
 };
 
 void* operator new(size_t size) {
