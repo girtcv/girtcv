@@ -29,7 +29,7 @@ public:
     }
 
     ~CTask() {
-        TAG();
+    //    TAG();
     }
 
 private:
@@ -81,7 +81,7 @@ public:
                 worker.join();
             }
         }
-        SHOW(("threads exit succeed!\n"));
+        //SHOW(("threads exit succeed!\n"));
     }
 
     CThreadPool(const CThreadPool&) = delete;

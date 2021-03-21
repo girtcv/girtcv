@@ -279,7 +279,7 @@ int main(int argc, const char* argv[])
 	}
 	ICameraPtr cameraSptr = CSingleCamera::GetInstance()->GetCameraPtr();
 	//初始化相机设备
-	InitCamera(cameraSptr);
+	//InitCamera(cameraSptr);
 #ifdef _DBG
 	//PrintCameraInfo(cameraSptr);
 #endif
@@ -290,10 +290,10 @@ int main(int argc, const char* argv[])
 	}
 
 	//初始化线程
-	CThreadPool<CTask> pool(1);
+	CThreadPool<CTask> pool(3);
 	for (size_t i = 0; i < 100; i++)
 	{
-	//	pool.push_task(new CTask(&CallBack, (void*)i));
+		pool.push_task(new CTask(&CallBack, (void*)i));
 	}
 	//pool.push_task(new CTask(&CallBack, (void*)0xCCCCCCCC));
 	//pool.push_task(std::make_shared<CTask>(&CallBack, (void*)0x12345678));

@@ -1,5 +1,6 @@
 #include <opencv2/opencv.hpp>
 #include <vector>
+#include <thread>
 #include "debug.h"
 
 using namespace cv;
@@ -138,7 +139,12 @@ ssize_t Test()
 
 void CallBack(void* param)
 {
-    SHOW(("CallBack%p\n", param));
+    //SHOW(("CallBack%p\n", param));
+    auto p = new int[1000];
+    *p++;
+    delete[] p;
+    std::thread::id tid = std::this_thread::get_id();
+    std::cout << tid << endl;
     //CAMShiftTrace();
     //Test();
 }

@@ -5,18 +5,33 @@
 #include <mutex>
 #include "debug.h"
 
-class CMemoryPool;
-
 //内存块 最小单元
-using pair_t = unsigned int;
-typedef struct _Pair
+struct Pair
 {
+	using pair_t = unsigned int;
     pair_t size;
 	pair_t blockNum;
 
-	_Pair(pair_t pSize, pair_t blockNumber)
-	:size(pSize), blockNum(blockNumber){}
-}Pair;
+	///@brief: 保证传进来的数值都是8or16的整数倍
+	Pair(pair_t pSize, pair_t blockNumber)
+	:size(pSize), blockNum(blockNumber){
+		//内存单元的对齐大小
+		const size_t align = sizeof(void*)*2;
+		//判断pSize是否符合内存对齐
+		size_t isAlign = pSize & (align-1);
+		if (isAlign){//if不符合对齐，调整大小使其对齐
+			size = pSize+align-isAlign;
+		}
+		//if align=16 isAlign=pSize&15;
+		//if isAlign=0 对齐 else 没有对齐
+		isAlign = blockNumber & (align-1);
+		if (isAlign){//if不符合对齐，调整大小使其对齐
+			blockNum = blockNumber+align-isAlign;
+		}
+	}
+};
+
+class CMemoryPool;
 
 //内存块 最小单元
 struct MemoryBlock
@@ -37,12 +52,14 @@ struct MemoryBlock
 //内存池
 class CMemoryPool
 {
-public:
+//public:
+private:
 	///@breif:初始化内存池
 	///@param size:内存块的大小
 	///@param blockNum:有多少个内存块
 	CMemoryPool(size_t size, size_t blockNum) noexcept
     :_sizeOfBlock(size), _numOfBlock(blockNum){
+		COUT("mem pool size:%ld, blockNum:%ld\n", size, blockNum);
 		if (_sizeOfBlock == 0) {
 			_poolBuf = nullptr;
 			_pHeader = nullptr;
@@ -67,26 +84,11 @@ public:
         pTem = (MemoryBlock*)((char*)pTem - realSize);
         pTem->pNext = nullptr;
 	}
+
+public:
 	//委托构造
-	CMemoryPool(Pair& pair)
+	CMemoryPool(Pair pair)
 	:CMemoryPool(pair.size, pair.blockNum){}
-
-	CMemoryPool() = default;
-
-	CMemoryPool& operator=(CMemoryPool&& rhs){
-		if(this != &rhs) {
-			if(_poolBuf) {
-				free(_poolBuf);
-			}
-
-			_poolBuf = rhs._poolBuf;
-			_pHeader = rhs._pHeader;
-			_sizeOfBlock = rhs._sizeOfBlock;
-			_numOfBlock = rhs._numOfBlock;
-			rhs._poolBuf = nullptr;
-		}
-		return *this;
-	}
 
 	~CMemoryPool() {
 		if (_poolBuf) {
@@ -181,14 +183,14 @@ public:
 	}
 
 private:
-#if 0
 	///@breif:_MemoryX(X,Y) X:内存单元块的大小 Y:申请多少块内存
-	CMemoryManager():_Memory0(0,0),_Memory64(64,10240),
-	_Memory128(128,2048), _Memory512(512,128),
-	_Memory1024(1024, 64){
+	CMemoryManager():_Memory0(Pair(0,0)),_Memory64(Pair(64,10240)),
+	_Memory128(Pair(128,2048)), _Memory512(Pair(512,128)),
+	_Memory1024(Pair(1024, 64)){
 		//每个内存池可以申请到的最大内存再加一
-		static unsigned int sizeArr[]  = {
+		static size_t sizeArr[]  = {
 			1, 65, 129, 513, 1025};
+
 		//内存池地址索引
 		static CMemoryPool* poolAddress[] = {
 		nullptr, &_Memory64, &_Memory128, &_Memory512,
@@ -196,42 +198,8 @@ private:
 
 		_poolSizeArr = sizeArr;
 		_poolArr = poolAddress;
-		_arrlength = sizeof(sizeArr)/sizeof(unsigned int);
+		_arrlength = sizeof(sizeArr)/sizeof(size_t);
 	}
-#endif
-	///@breif:_MemoryX(X,Y) X:内存单元块的大小 Y:申请多少块内存
-	CMemoryManager(){
-		Pair pairArr[] = { Pair(0,0),
-		Pair(64,10240),Pair(128,2048),
-		Pair(512,128),Pair(1024, 64)};
-
-		auto s = sizeof(pairArr)/sizeof(Pair);
-		COUT("sizeOfpairArr:%ld\n", s);
-		//每个内存池可以申请到的最大内存再加一
-		static size_t sizeArr[sizeof(pairArr)/sizeof(Pair)] = {0};
-		for (size_t i = 0; i < sizeof(pairArr)/sizeof(Pair); ++i) {
-			sizeArr[i] = pairArr[i].size+1;
-		}
-
-		static CMemoryPool mPoolArr[sizeof(pairArr)/sizeof(Pair)];
-		for (size_t j = 0; j < sizeof(pairArr)/sizeof(Pair); ++j) {
-			mPoolArr[j] = CMemoryPool(pairArr[j]);
-		}
-
-		//内存池地址索引
-		static CMemoryPool* poolAddress[sizeof(pairArr)/sizeof(Pair)];
-		size_t k;
-		for (k = 1; k < sizeof(pairArr)/sizeof(Pair)-1; ++k) {
-			poolAddress[k] = &mPoolArr[k];
-		}
-		poolAddress[0] = nullptr;
-		poolAddress[k] = &mPoolArr[0];
-
-		_poolSizeArr = sizeArr;
-		_poolArr = poolAddress;
-		_arrlength = sizeof(pairArr)/sizeof(Pair);
-	}
-
 
 	///@breif:根据要申请的内存大小去匹配合适的内存池
 	///@param size:要申请的内存大小
@@ -248,16 +216,16 @@ private:
 	size_t  _arrlength;
 	size_t* _poolSizeArr;
 	CMemoryPool** _poolArr;
-
+#if 1
 	//虚拟内存池 用来管理malloc出来的大内存
-	//CMemoryPool _Memory0;
-#if 0
+	CMemoryPool _Memory0;
+
 	//64byte内存池 <64的内存统一在这个池里申请
-	//CMemoryPool _Memory64;
+	CMemoryPool _Memory64;
 	//128byte内存池 64<size<128在这个池里申请
-	// CMemoryPool _Memory128;
-	// CMemoryPool _Memory512;
-	// CMemoryPool _Memory1024;
+	CMemoryPool _Memory128;
+	CMemoryPool _Memory512;
+	CMemoryPool _Memory1024;
 #endif
 };
 
